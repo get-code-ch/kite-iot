@@ -1,0 +1,14 @@
+[Unit]
+Description=GoSwitch Device service
+After=network.target
+StartLimitIntervalSec=30
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=root
+ExecStart=/opt/goswitch/gsdevice /opt/goswitch/config/device.json
+
+[Install]
+WantedBy=multi-user.target

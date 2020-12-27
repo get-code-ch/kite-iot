@@ -1,0 +1,10 @@
+set GOARCH=amd64
+set GOOS=linux
+go build -ldflags="-s -w"  -o ./build/release/linux_amd64/kite-iot
+set GOARCH=arm
+set GOARM=5
+set GOOS=linux
+go build -ldflags="-s -w"   -o ./build/release/linux_arm5/kite-iot
+set GOARCH=amd64
+set GOOS=windows
+go build -ldflags="-s -w"  -o ./build/release/windows_amd64/kite-iot.exe
