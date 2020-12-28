@@ -17,9 +17,11 @@ import (
 )
 
 type Iot struct {
-	conf *IotConf
-	conn *websocket.Conn
-	wg   sync.WaitGroup
+	conf      *IotConf
+	conn      *websocket.Conn
+	wg        sync.WaitGroup
+	ics       map[string]*IC
+	endpoints []kite.Endpoint
 }
 
 func (iot *Iot) waitMessage() {
@@ -34,7 +36,7 @@ func (iot *Iot) waitMessage() {
 			switch message.Action {
 			// Receiving provisioning data
 			case kite.A_PROVISION:
-
+				iot.provisioning(message.Data)
 			default:
 				log.Printf("Message received -> %v", message.Data)
 			}
@@ -48,28 +50,28 @@ func (iot *Iot) sendMessage(input chan []byte) {
 	for {
 		// Parsing input string
 		if parsed := inputRe.FindSubmatch(<-input); parsed != nil {
-			to := kite.Endpoint{Domain: "*", Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+			to := kite.Address{Domain: "*", Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
 			msg := ""
 
 			action := kite.Action(strings.ToLower(string(parsed[1])))
-			to.StringToEndpoint(string(parsed[2]))
+			to.StringToAddress(string(parsed[2]))
 
 			if err := action.IsValid(); err == nil {
 				switch action {
 				default:
 					msg = string(parsed[3])
-					message := kite.Message{Action: action, Sender: iot.conf.Endpoint, Receiver: to, Data: msg}
+					message := kite.Message{Action: action, Sender: iot.conf.Address, Receiver: to, Data: msg}
 					if err := iot.conn.WriteJSON(message); err != nil {
 						return
 					}
 				}
 			} else {
 				log.Printf("%s", err)
-				fmt.Printf("%s> ", iot.conf.Endpoint)
+				fmt.Printf("%s> ", iot.conf.Address)
 			}
 		} else {
 			log.Printf("Invalid command ({action}[@{destination}]{:{message}})")
-			fmt.Printf("%s> ", iot.conf.Endpoint)
+			fmt.Printf("%s> ", iot.conf.Address)
 		}
 	}
 }
@@ -121,8 +123,7 @@ func main() {
 	dialer := *websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
-
-	var wg  sync.WaitGroup
+	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
@@ -149,7 +150,7 @@ func main() {
 			})
 
 			// Connection is now established, now we sending iot registration to server
-			msg := kite.Message{Action: "register", Sender: iot.conf.Endpoint, Data: iot.conf.ApiKey}
+			msg := kite.Message{Action: "register", Sender: iot.conf.Address, Data: iot.conf.ApiKey}
 			if err := iot.conn.WriteJSON(msg); err != nil {
 				log.Printf("Error registring iot on sever --> %v", err)
 				time.Sleep(5 * time.Second)

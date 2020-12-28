@@ -1,12 +1,12 @@
 {
-  "name": "local.iot.precision.debug.*",
+  "name": "local.iot.precision.xxx.*",
   "api_key": "gjweoiht85093jflkes",
   "server": "192.168.10.62",
   "port": "9081",
   "ssl": false,
   "address": {
     "id": "*",
-    "address": "debug",
+    "address": "xxx",
     "host": "precision",
     "type": "iot",
     "domain": "local"

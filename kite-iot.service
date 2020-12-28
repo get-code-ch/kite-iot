@@ -1,5 +1,5 @@
 [Unit]
-Description=GoSwitch Device service
+Description=Kite Iot service
 After=network.target
 StartLimitIntervalSec=30
 
@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=root
-ExecStart=/opt/goswitch/gsdevice /opt/goswitch/config/device.json
+ExecStart=/opt/kite-iot/kite-iot /opt/kite-iot/config/default.json
 
 [Install]
 WantedBy=multi-user.target
