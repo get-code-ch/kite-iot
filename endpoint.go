@@ -4,21 +4,30 @@ import (
 	"github.com/get-code-ch/ads1115"
 	kite "github.com/get-code-ch/kite-common"
 	"github.com/get-code-ch/mcp23008/v3"
+	"github.com/gorilla/websocket"
 	"log"
 	"strconv"
+)
+
+type (
+	EndpointConn struct {
+		conn *websocket.Conn
+		endpoint kite.Endpoint
+	}
 )
 
 func (iot *Iot) provisioning(data interface{}) {
 	log.Printf("Provisioning iot...")
 
-	iot.endpoints = nil
+	iot.endpoints = make(map[kite.Address]*EndpointConn)
 	iot.ics = make(map[string]*IC)
 	for _, item := range data.([]interface{}) {
 		endpoint := kite.Endpoint{}
 		endpoint = endpoint.SetFromInterface(item)
-		iot.endpoints = append(iot.endpoints, endpoint)
+		iot.endpoints[endpoint.Address] = new(EndpointConn)
+		iot.endpoints[endpoint.Address].endpoint = endpoint
 
-		// If ic not already configured create it
+		// If ic is not exist create it
 		if _, ok := iot.ics[endpoint.Address.Address]; !ok {
 			switch endpoint.IC.Type {
 			case kite.I_MCP23008:
@@ -56,7 +65,9 @@ func (iot *Iot) provisioning(data interface{}) {
 		case kite.I_MCP23008:
 			if endpoint.Attributes["mode"] == "input" || endpoint.Attributes["mode"] == "push" {
 				if gpio, err := strconv.Atoi(endpoint.Address.Id); err == nil {
-					mcp23008.GpioSetRead(iot.ics[endpoint.Address.Address].IC.(*mcp23008.Mcp23008), byte(gpio) )
+					if err := mcp23008.GpioSetRead(iot.ics[endpoint.Address.Address].IC.(*mcp23008.Mcp23008), byte(gpio) ); err != nil {
+						log.Printf("Error configuring gpio %d as input mode --> %v", gpio, err)
+					}
 				}
 			}
 			break
@@ -65,6 +76,10 @@ func (iot *Iot) provisioning(data interface{}) {
 		default:
 			break
 		}
+
+		// Establish connection for endpoint
+		iot.endpoints[endpoint.Address].conn = connectServer(iot, endpoint.Address)
+
 	}
 
 }

@@ -11,7 +11,6 @@ type (
 		Address int
 		Type kite.IcRef
 		IC interface{}
-		//interrupt chan byte
 	}
 )
 
@@ -20,9 +19,14 @@ func (ic *IC) listenMcp23008Interrupt(iot *Iot, interrupt chan byte) {
 	for {
 		gpio := <-interrupt
 		state := ic.readGPIO(gpio)
-		//log.Printf("Interrupt occurs on %d, new value %d", gpio, state)
 
-		var message = kite.Message{Data: fmt.Sprintf("Interrupt occurs on %d, new value %d", gpio, state), Sender: iot.conf.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
+		endpoint := iot.conf.Address
+		endpoint.Type = kite.H_ENDPOINT
+		endpoint.Address = fmt.Sprintf("%d",ic.Address)
+		endpoint.Id = fmt.Sprintf("%d", gpio)
+
+		//var message = kite.Message{Data: fmt.Sprintf("Interrupt occurs on %d, new value %d", gpio, state), Sender: iot.conf.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
+		var message = kite.Message{Data: fmt.Sprintf("Interrupt occurs on %d, new value %d", gpio, state), Sender: endpoint, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
 		iot.conn.WriteJSON(message)
 
 		message.Action = kite.A_LOG
