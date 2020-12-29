@@ -56,22 +56,24 @@ func connectServer(iot *Iot, me kite.Address) *websocket.Conn {
 	})
 
 	// Connection is now established, now we sending iot registration to server
-	msg := kite.Message{Action: kite.A_REGISTER, Sender: me, Data: iot.conf.ApiKey}
-	if err := conn.WriteJSON(msg); err != nil {
+	message:= kite.Message{Action: kite.A_REGISTER, Sender: me, Data: iot.conf.ApiKey}
+	if err := conn.WriteJSON(message); err != nil {
 		log.Printf("Error registring iot on sever --> %v", err)
 		time.Sleep(5 * time.Second)
 		return nil
 	}
 
 	// Reading server response
-	if err = conn.ReadJSON(&msg); err != nil {
+	if err = conn.ReadJSON(&message); err != nil {
 		log.Printf("Error registring iot on sever --> %v", err)
 		time.Sleep(5 * time.Second)
 		return nil
 	} else {
-		//TODO: Checking if returned message is an ACCEPT
-		fmt.Println()
-		log.Printf("Message received from %v\n", msg)
+		if message.Action == kite.A_ACCEPTED {
+			log.Printf("Connection accepted from %s", message.Sender)
+		} else {
+			log.Printf("Unattended response from %s", message.Sender)
+		}
 	}
 	return conn
 }

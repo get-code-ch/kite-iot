@@ -32,9 +32,13 @@ func (iot *Iot) waitMessage() {
 			switch message.Action {
 			// Receiving provisioning data
 			case kite.A_PROVISION:
-				iot.provisioning(message.Data)
+				go iot.provisioning(message.Data)
+				break
+			case kite.A_ACCEPTED:
+				break
 			default:
-				log.Printf("Message received -> %v", message.Data)
+				//log.Printf("Message received -> %v", message.Data)
+				break
 			}
 		}
 	}
@@ -75,21 +79,6 @@ func (iot *Iot) sendMessage(input chan []byte) {
 	}
 }
 
-/*
-func (iot *Iot) readStdin(input chan []byte) {
-	for {
-		fmt.Printf("%s> ", iot.conf.Endpoint)
-		msg := bufio.NewScanner(os.Stdin)
-		msg.Scan()
-		if len(msg.Bytes()) == 0 {
-			iot.wg.Done()
-			return
-		}
-		input <- msg.Bytes()
-	}
-}
-*/
-
 func main() {
 	chanMsg := make(chan []byte)
 
@@ -106,8 +95,7 @@ func main() {
 
 	go func() {
 		for {
-			iot.conn = connectServer(iot, iot.conf.Address)
-			if iot.conn == nil {
+			if iot.conn = connectServer(iot, iot.conf.Address); iot.conn == nil {
 				continue
 			}
 
@@ -115,9 +103,6 @@ func main() {
 
 			// Listening new server message
 			go iot.waitMessage()
-
-			// Reading prompt
-			//go iot.readStdin(chanMsg)
 
 			// Sending message
 			go iot.sendMessage(chanMsg)
