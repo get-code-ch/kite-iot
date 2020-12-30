@@ -47,11 +47,12 @@ func connectServer(iot *Iot, me kite.Address) *websocket.Conn {
 			}
 		}
 	}
-	log.Printf("kite server connectected, (http status %d)", response.StatusCode)
+	_ = response
+	//log.Printf("kite server connectected, (http status %d)", response.StatusCode)
 
 	// Configuring ping handler (just logging a ping on stdin
 	conn.SetPingHandler(func(data string) error {
-		log.Printf("ping received\n")
+		//log.Printf("ping received\n")
 		return nil
 	})
 
@@ -70,9 +71,9 @@ func connectServer(iot *Iot, me kite.Address) *websocket.Conn {
 		return nil
 	} else {
 		if message.Action == kite.A_ACCEPTED {
-			log.Printf("Connection accepted from %s", message.Sender)
+			log.Printf("Connection accepted for %s from %s", message.Receiver, message.Sender)
 		} else {
-			log.Printf("Unattended response from %s", message.Sender)
+			log.Printf("Unattended response for %s from %s", message.Receiver, message.Sender)
 		}
 	}
 	return conn

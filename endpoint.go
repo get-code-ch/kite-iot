@@ -40,28 +40,28 @@ func (iot *Iot) provisioning(data interface{}) {
 
 		// If ic is not exist create it
 		if _, ok := iot.ics[endpoint.Address.Address]; !ok {
+			iot.ics[endpoint.Address.Address] = new(IC)
 			switch endpoint.IC.Type {
 			case kite.I_MCP23008:
-				if icAddress, err := strconv.Atoi(endpoint.Address.Address); err == nil {
-					ic.address = icAddress
-					ic.icRef = endpoint.IC.Type
-					if mcp, err := mcp23008.New(iot.conf.I2c, "", icAddress, 0, ""); err == nil {
-						ic.ic = &mcp
-						interrupt := make(chan byte)
-						iot.ics[endpoint.Address.Address] = ic
-						go mcp23008.RegisterInterrupt(ic.ic.(*mcp23008.Mcp23008), interrupt)
-						go ic.listenMcp23008Interrupt(iot, interrupt)
-					}
+				ic.address = endpoint.IC.Address
+				ic.icRef = endpoint.IC.Type
+				if mcp, err := mcp23008.New(iot.conf.I2c, endpoint.IC.Name, endpoint.IC.Address, 0, endpoint.IC.Description); err == nil {
+					ic.ic = &mcp
+					interrupt := make(chan byte)
+					iot.ics[endpoint.Address.Address] = ic
+					go mcp23008.RegisterInterrupt(ic.ic.(*mcp23008.Mcp23008), interrupt)
+					go ic.listenMcp23008Interrupt(iot, interrupt)
+				} else {
+					log.Printf("Error creating ics --> %v", err)
 				}
 				break
+
 			case kite.I_ADS1115:
-				if icAddress, err := strconv.Atoi(endpoint.Address.Address); err == nil {
-					ic.address = icAddress
-					ic.icRef = endpoint.IC.Type
-					if ads, err := ads1115.New(iot.conf.I2c, "", icAddress, ""); err == nil {
-						ic.ic = &ads
-						iot.ics[endpoint.Address.Address] = ic
-					}
+				ic.address = endpoint.IC.Address
+				ic.icRef = endpoint.IC.Type
+				if ads, err := ads1115.New(iot.conf.I2c, endpoint.IC.Name, endpoint.IC.Address, endpoint.IC.Description); err == nil {
+					ic.ic = &ads
+					iot.ics[endpoint.Address.Address] = ic
 				}
 				break
 			default:
@@ -115,20 +115,29 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 		} else {
 			switch message.Action {
 			case kite.A_CMD:
+
+				cmd := strings.ToLower(message.Data.(string))
+				gpio := 0
+				if gpio, err = strconv.Atoi(ec.endpoint.Address.Id); err != nil {
+					break
+				}
+				writeMode := ec.endpoint.Attributes["mode"].(string) == "output"
+
+
 				if ec.endpoint.IC.Type == kite.I_MCP23008 {
-					switch strings.ToLower(message.Data.(string)) {
+					switch cmd {
 					case "on":
-						if gpio, err := strconv.Atoi(ec.endpoint.Address.Id); err == nil {
+						if writeMode {
+							log.Printf("(%s) Command \"%s\" received from %s for %s", ec.endpoint.Address.Id, cmd, message.Sender, message.Receiver)
 							iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 1)
 						}
 						break
 					case "off":
-						if strings.ToLower(message.Data.(string)) == "off" {
-							if gpio, err := strconv.Atoi(ec.endpoint.Address.Id); err == nil {
-								iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
-							}
-							break
+						if writeMode {
+							log.Printf("(%s) Command \"%s\" received from %s for %s", ec.endpoint.Address.Id, cmd, message.Sender, message.Receiver)
+							iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
 						}
+						break
 					}
 				}
 				break
