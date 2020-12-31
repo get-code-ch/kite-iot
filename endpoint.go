@@ -32,6 +32,10 @@ func (iot *Iot) provisioning(data interface{}) {
 
 	iot.endpoints = make(map[kite.Address]*EndpointConn)
 	iot.ics = make(map[string]*IC)
+
+	if data == nil {
+		return
+	}
 	for _, item := range data.([]interface{}) {
 		ic := new(IC)
 		endpoint := kite.Endpoint{}
@@ -114,18 +118,28 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 			ec.wg.Done()
 			return
 		} else {
+			cmd := strings.ToLower(message.Data.(string))
+			gpio := 0
+			state := 0
+			result := 0.0
+
+			/*
+				log.Printf("Action : %s", message.Action)
+				log.Printf("Command : %s", cmd)
+				log.Printf("IC : %s", ec.endpoint.IC.Type)
+				log.Printf("Endpoint : %s", ec.endpoint.Address)
+			*/
+
 			switch message.Action {
 			case kite.A_CMD:
 
-				cmd := strings.ToLower(message.Data.(string))
-				gpio := 0
-				if gpio, err = strconv.Atoi(ec.endpoint.Address.Id); err != nil {
-					break
-				}
 				writeMode := ec.endpoint.Attributes["mode"].(string) == "output"
 
 				if ec.endpoint.IC.Type == kite.I_MCP23008 {
-					state := 0
+					if gpio, err = strconv.Atoi(ec.endpoint.Address.Id); err != nil {
+						continue
+					}
+
 					switch cmd {
 					case "on":
 						if writeMode {
@@ -139,15 +153,20 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 						break
 					case "read":
 						state = iot.ics[ec.endpoint.Address.Address].readGPIO(gpio)
+						break
 					}
 					var message = kite.Message{Data: fmt.Sprintf("new value %d for %s", state, ec.endpoint.Address), Sender: ec.endpoint.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
 					_ = ec.conn.WriteJSON(message)
+					continue
 				}
+
 				if ec.endpoint.IC.Type == kite.I_ADS1115 {
 					switch cmd {
 					case "read":
-						result := iot.ics[ec.endpoint.Address.Address].readValue(ec.endpoint)
-						log.Printf("Readed value for %s, %0.00f %s", ec.endpoint.Name, result, ec.endpoint.Attributes["unit"])
+						result = iot.ics[ec.endpoint.Address.Address].readValue(ec.endpoint)
+						data := fmt.Sprintf("Value for %s, %0.2f%s", ec.endpoint.Name, result, ec.endpoint.Attributes["unit"])
+						var message = kite.Message{Data: data, Sender: ec.endpoint.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
+						_ = ec.conn.WriteJSON(message)
 						break
 					}
 				}
@@ -156,7 +175,6 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 			case kite.A_ACCEPTED:
 				break
 			default:
-				//log.Printf("Message received -> %v", message.Data)
 				break
 			}
 		}

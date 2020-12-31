@@ -17,6 +17,7 @@ type (
 		icRef   kite.IcRef
 		ic      interface{}
 		wg      sync.WaitGroup
+		sync	sync.Mutex
 	}
 )
 
@@ -73,7 +74,9 @@ func (ic *IC) writeGPIO(gpio int, state int) int {
 
 func (ic *IC) readValue(endpoint kite.Endpoint) float64 {
 	ads := ic.ic.(*ads1115.Ads1115)
+	ic.sync.Lock()
 	vIn := ads1115.ReadConversionRegister(ads, endpoint.Address.Id)
+	ic.sync.Unlock()
 	result := 0.0
 
 	if _, ok := endpoint.Attributes["scale"]; ok {
