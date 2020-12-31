@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/get-code-ch/ads1115"
 	kite "github.com/get-code-ch/kite-common"
 	"github.com/get-code-ch/mcp23008/v3"
@@ -123,23 +124,34 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 				}
 				writeMode := ec.endpoint.Attributes["mode"].(string) == "output"
 
-
 				if ec.endpoint.IC.Type == kite.I_MCP23008 {
+					state := 0
 					switch cmd {
 					case "on":
 						if writeMode {
-							log.Printf("(%s) Command \"%s\" received from %s for %s", ec.endpoint.Address.Id, cmd, message.Sender, message.Receiver)
-							iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 1)
+							state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 1)
 						}
 						break
 					case "off":
 						if writeMode {
-							log.Printf("(%s) Command \"%s\" received from %s for %s", ec.endpoint.Address.Id, cmd, message.Sender, message.Receiver)
-							iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
+							state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
 						}
+						break
+					case "read":
+						state = iot.ics[ec.endpoint.Address.Address].readGPIO(gpio)
+					}
+					var message = kite.Message{Data: fmt.Sprintf("new value %d for %s", state, ec.endpoint.Address), Sender: ec.endpoint.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
+					_ = ec.conn.WriteJSON(message)
+				}
+				if ec.endpoint.IC.Type == kite.I_ADS1115 {
+					switch cmd {
+					case "read":
+						result := iot.ics[ec.endpoint.Address.Address].readValue(ec.endpoint)
+						log.Printf("Readed value for %s, %0.00f %s", ec.endpoint.Name, result, ec.endpoint.Attributes["unit"])
 						break
 					}
 				}
+
 				break
 			case kite.A_ACCEPTED:
 				break
