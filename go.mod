@@ -9,7 +9,7 @@ replace (
 
 require (
 	github.com/get-code-ch/ads1115 v0.0.0-20201030085128-84512810eb26
-	github.com/get-code-ch/kite-common v0.0.0-20201231143031-7a44e785ee42
+	github.com/get-code-ch/kite-common v0.0.0-20210101094746-7a93386692c8
 	github.com/get-code-ch/mcp23008/v3 v3.0.0-20200901044239-9e2f23436931
 	github.com/gorilla/websocket v1.4.2
 )
