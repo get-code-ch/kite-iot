@@ -7,9 +7,11 @@ import (
 	"github.com/get-code-ch/mcp23008/v3"
 	"github.com/gorilla/websocket"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type (
@@ -77,7 +79,7 @@ func (iot *Iot) provisioning(data interface{}) {
 		// Setting up endpoint
 		switch endpoint.IC.Type {
 		case kite.I_MCP23008:
-			if endpoint.Attributes["mode"] == "input" || endpoint.Attributes["mode"] == "push" {
+			if endpoint.Attributes["mode"] == "input" || endpoint.Attributes["mode"] == "event" {
 				if gpio, err := strconv.Atoi(endpoint.Address.Id); err == nil {
 					if err := mcp23008.GpioSetRead(iot.ics[endpoint.Address.Address].ic.(*mcp23008.Mcp23008), byte(gpio)); err != nil {
 						log.Printf("Error configuring gpio %d as input mode --> %v", gpio, err)
@@ -106,6 +108,16 @@ func (iot *Iot) provisioning(data interface{}) {
 			}
 		}()
 	}
+
+	// When all endpoints are configured we send a log message to server and to telegram.
+	iot.sync.Lock()
+	response := fmt.Sprintf("%s started and provisioned", iot.conf.Name)
+	message := kite.Message{Action: kite.A_LOG, Sender: iot.conf.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Data: response}
+	_ = iot.conn.WriteJSON(message)
+	message = kite.Message{Action: kite.A_NOTIFY, Sender: iot.conf.Address, Receiver: kite.Address{Domain: "telegram", Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Data: response}
+	_ = iot.conn.WriteJSON(message)
+	iot.sync.Unlock()
+
 	wg.Wait()
 }
 
@@ -118,55 +130,172 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 			ec.wg.Done()
 			return
 		} else {
-			cmd := strings.ToLower(message.Data.(string))
+			//log.Printf("Message --> %v", message)
+			cmd := ""
 			gpio := 0
 			state := 0
 			result := 0.0
 
-			/*
-				log.Printf("Action : %s", message.Action)
-				log.Printf("Command : %s", cmd)
-				log.Printf("IC : %s", ec.endpoint.IC.Type)
-				log.Printf("Endpoint : %s", ec.endpoint.Address)
-			*/
-
 			switch message.Action {
 			case kite.A_CMD:
+				cmd = strings.ToLower(message.Data.(string))
+				writeMode := false
+				pushMode := false
+				duration := 0.0
 
-				writeMode := ec.endpoint.Attributes["mode"].(string) == "output"
+				switch ec.endpoint.Attributes["mode"].(type) {
+				case string:
+					writeMode = ec.endpoint.Attributes["mode"].(string) == "output"
+					pushMode = ec.endpoint.Attributes["mode"].(string) == "push"
+				}
+
+				switch ec.endpoint.Attributes["duration"].(type) {
+				case float64:
+					duration = ec.endpoint.Attributes["duration"].(float64)
+				}
 
 				if ec.endpoint.IC.Type == kite.I_MCP23008 {
 					if gpio, err = strconv.Atoi(ec.endpoint.Address.Id); err != nil {
 						continue
 					}
 
+					var response = kite.Message{Sender: ec.endpoint.Address, Receiver: message.Sender, Action: kite.A_VALUE}
 					switch cmd {
+
+					// Received command is "on" force state of GPIO to 1 regardless current state
 					case "on":
 						if writeMode {
 							state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 1)
+						} else {
+							continue
 						}
+						response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+						data["type"] = "gpio"
+						data["value"] = state == 1
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
 						break
+
+					// Received command is "off" force state of GPIO to 0 regardless current state
 					case "off":
 						if writeMode {
 							state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
+						} else {
+							continue
 						}
+						response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+						data["type"] = "gpio"
+						data["value"] = state == 1
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
 						break
+
+					// Received command is "reverse" we reverse  the state of GPIO
+					case "reverse":
+						if writeMode {
+							state = int(math.Abs(float64(iot.ics[ec.endpoint.Address.Address].readGPIO(gpio) - 1)))
+							state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, state)
+						} else {
+							continue
+						}
+						response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+						data["type"] = "gpio"
+						data["value"] = state == 1
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
+						break
+
+					case "push":
+						if !pushMode || duration == 0 {
+							continue
+						}
+						state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 1)
+						time.Sleep(time.Duration(duration) * time.Millisecond)
+						state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
+
+						/*
+							response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+							response.Action = kite.A_VALUE
+
+							data := make(map[string]interface{})
+							data["type"] = "gpio"
+							data["value"] = state == 1
+							data["name"] = ec.endpoint.Name
+							data["description"] = ec.endpoint.Description
+
+							response.Data = data
+
+							_ = ec.conn.WriteJSON(response)
+						*/
+						break
+
+					// Command "read" we reading and sending current state of GPIO
 					case "read":
 						state = iot.ics[ec.endpoint.Address.Address].readGPIO(gpio)
+						response.Receiver = message.Sender
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+						data["type"] = "gpio"
+						data["value"] = state == 1
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
 						break
 					}
-					var message = kite.Message{Data: fmt.Sprintf("new value %d for %s", state, ec.endpoint.Address), Sender: ec.endpoint.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
-					_ = ec.conn.WriteJSON(message)
+					// at this point exiting switch message.Action
 					continue
 				}
 
 				if ec.endpoint.IC.Type == kite.I_ADS1115 {
+					var response = kite.Message{Sender: ec.endpoint.Address, Receiver: message.Sender, Action: kite.A_VALUE}
 					switch cmd {
+
+					// For ADS1115 the only one command is reading value of register
 					case "read":
 						result = iot.ics[ec.endpoint.Address.Address].readValue(ec.endpoint)
-						data := fmt.Sprintf("Value for %s, %0.2f%s", ec.endpoint.Name, result, ec.endpoint.Attributes["unit"])
-						var message = kite.Message{Data: data, Sender: ec.endpoint.Address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
-						_ = ec.conn.WriteJSON(message)
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+
+						data["type"] = "analog"
+						data["value"] = result
+						data["unit"] = ec.endpoint.Attributes["unit"]
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
 						break
 					}
 				}

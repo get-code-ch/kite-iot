@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"reflect"
+	"strconv"
 	"sync"
 )
 
@@ -17,7 +18,7 @@ type (
 		icRef   kite.IcRef
 		ic      interface{}
 		wg      sync.WaitGroup
-		sync	sync.Mutex
+		sync    sync.Mutex
 	}
 )
 
@@ -33,29 +34,77 @@ func (ic *IC) listenMcp23008Interrupt(iot *Iot, interrupt chan byte) {
 		address.Id = fmt.Sprintf("%d", gpio)
 
 		endpoint := iot.endpoints[address].endpoint
+		mode := ""
+		slave := ""
+
+		switch endpoint.Attributes["mode"].(type) {
+		case string:
+			mode = endpoint.Attributes["mode"].(string)
+		}
+		switch endpoint.Attributes["slave"].(type) {
+		case string:
+			slave = endpoint.Attributes["slave"].(string)
+		}
 
 		iot.sync.Lock()
-		var message = kite.Message{Data: fmt.Sprintf("%s (%s) is updated to %d", endpoint.Description, endpoint.Address, state), Sender: address, Receiver: kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}, Action: kite.A_NOTIFY}
-		if err := iot.conn.WriteJSON(message); err != nil {
-			iot.conn.Close()
+		switch mode {
+		case "event":
+			if state == 0 {
+				break
+			}
+			to := kite.Address{}
+			command := endpoint.Attributes["data"].(string)
+			action := kite.Action(endpoint.Attributes["action"].(string))
+			to.StringToAddress(endpoint.Attributes["to"].(string))
+			response := kite.Message{Data: command, Sender: address, Receiver: to, Action: action}
+			if err := iot.conn.WriteJSON(response); err != nil {
+				iot.conn.Close()
+			}
 			break
-		}
+		default:
+			// if GPIO had a slave we copy state to it
+			if slave != "" {
+				if gpio, err := strconv.Atoi(slave); err == nil {
+					ic.writeGPIO(gpio, state)
+				}
+			}
 
-		message.Action = kite.A_LOG
-		if err := iot.conn.WriteJSON(message); err != nil {
-			iot.conn.Close()
-			break
-		}
+			response := kite.Message{Sender: address}
+			response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+			response.Action = kite.A_VALUE
 
-		if endpoint.Notification.Telegram {
-			message.Action = kite.A_NOTIFY
-			message.Receiver = kite.Address{Domain: "telegram", Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
-			if err := iot.conn.WriteJSON(message); err != nil {
+			data := make(map[string]interface{})
+			data["type"] = "gpio"
+			data["value"] = state == 1
+			data["name"] = endpoint.Name
+			data["description"] = endpoint.Description
+
+			response.Data = data
+
+			if err := iot.conn.WriteJSON(response); err != nil {
 				iot.conn.Close()
 				break
 			}
+
+			response.Data = fmt.Sprintf("New value for GPIO %s (%s) -> %t", endpoint.Description, endpoint.Address, state == 1)
+
+			response.Action = kite.A_LOG
+			if err := iot.conn.WriteJSON(response); err != nil {
+				iot.conn.Close()
+				break
+			}
+
+			if endpoint.Notification.Telegram {
+				response.Action = kite.A_NOTIFY
+				response.Receiver = kite.Address{Domain: "telegram", Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
+				if err := iot.conn.WriteJSON(response); err != nil {
+					iot.conn.Close()
+					break
+				}
+			}
 		}
 		iot.sync.Unlock()
+
 	}
 	log.Printf("Listening M23008 Interrupt exited (%d)...", ic.address)
 }
