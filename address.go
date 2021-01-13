@@ -25,7 +25,6 @@ func connectServer(iot *Iot, me kite.Address) *websocket.Conn {
 		serverURL = url.URL{Scheme: "ws", Host: host, Path: "/ws"}
 	}
 
-
 	// Adding origin in header, for server cross origin resource sharing (CORS) check
 	header := http.Header{}
 	header.Set("Origin", serverURL.String())
@@ -57,7 +56,7 @@ func connectServer(iot *Iot, me kite.Address) *websocket.Conn {
 	})
 
 	// Connection is now established, now we sending iot registration to server
-	message:= kite.Message{Action: kite.A_REGISTER, Sender: me, Data: iot.conf.ApiKey}
+	message := kite.Message{Action: kite.A_REGISTER, Sender: me, Data: iot.conf.ApiKey}
 	if err := conn.WriteJSON(message); err != nil {
 		log.Printf("Error registring iot on sever --> %v", err)
 		time.Sleep(5 * time.Second)
