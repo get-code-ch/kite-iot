@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type (
@@ -150,7 +151,51 @@ func (ic *IC) writeGPIO(gpio int, state int) int {
 	return int(mcp23008.ReadGpio(ic.ic.(*mcp23008.Mcp23008), byte(gpio)))
 }
 
-func (ic *IC) readValue(endpoint kite.Endpoint) float64 {
+func (ic *IC) refreshAds1115(iot *Iot, endpoint kite.Endpoint) {
+	var refreshRate time.Duration
+	if val, ok := endpoint.Attributes["refresh_interval"]; ok {
+		refreshRate = time.Duration(val.(float64)) * time.Second
+	} else {
+		return
+	}
+
+	ticker := time.NewTicker(refreshRate).C
+
+	var response = kite.Message{
+		Sender:   endpoint.Address,
+		Receiver: kite.Address{Domain: endpoint.Address.Domain, Type: "*", Host: "*", Address: "*", Id: "*"},
+		Action:   kite.A_VALUE,
+		Data:     nil,
+	}
+
+	for {
+		select {
+		case <-ticker:
+			log.Printf("Refresh event for %s", endpoint.Description)
+			result := ic.readValueAds1115(endpoint)
+			data := make(map[string]interface{})
+
+			data["type"] = "analog"
+			data["value"] = result
+			data["unit"] = endpoint.Attributes["unit"]
+			data["name"] = endpoint.Name
+			data["description"] = endpoint.Description
+
+			response.Data = data
+
+			iot.sync.Lock()
+			if err := iot.conn.WriteJSON(response); err != nil {
+				iot.conn.Close()
+				iot.sync.Unlock()
+				break
+			}
+			iot.sync.Unlock()
+
+		}
+	}
+}
+
+func (ic *IC) readValueAds1115(endpoint kite.Endpoint) interface{} {
 	ads := ic.ic.(*ads1115.Ads1115)
 	ic.sync.Lock()
 	vIn := ads1115.ReadConversionRegister(ads, endpoint.Address.Id)
@@ -277,6 +322,72 @@ func (ic *IC) ToLux(inputs interface{}) float64 {
 		result = -1
 	}
 	return result
+
+}
+
+func (ic *IC) readValueVirtual(endpoint kite.Endpoint) interface{} {
+
+	var result interface{}
+	if _, ok := endpoint.Attributes["function"]; ok {
+		fnc := reflect.ValueOf(ic).MethodByName(endpoint.Attributes["function"].(string))
+		if fnc.IsValid() {
+			arguments := endpoint.Attributes
+			inputs := make([]reflect.Value, 1)
+
+			inputs[0] = reflect.ValueOf(arguments)
+			result = fnc.Call(inputs)[0]
+		} else {
+			log.Printf("Converting function %s doesn't exist", endpoint.Attributes["function"].(string))
+		}
+	} else {
+		result = nil
+	}
+	return result
+}
+
+// SunriseSunset function returning information about sunrise/sunset/twilight depending lat and long
+func (ic *IC) SunriseSunset(inputs interface{}) interface{} {
+
+	// function variables
+	var lat float64
+	var lng float64
+
+	arguments := make(map[string]interface{})
+
+	// Check if inputs parameter are Ok, if not returning "Error" value
+	if reflect.TypeOf(inputs).Kind() == reflect.TypeOf(arguments).Kind() {
+		arguments = inputs.(map[string]interface{})
+	} else {
+		log.Printf("Invalid inputs --> %v", inputs)
+		return nil
+	}
+
+	// Checking inputs arguments and initializing function variables
+	if input, ok := arguments["lat"]; ok {
+		if reflect.TypeOf(input).Kind() == reflect.Float64 {
+			lat = arguments["lat"].(float64)
+		} else {
+			return nil
+		}
+	} else {
+		return nil
+	}
+
+	if input, ok := arguments["lng"]; ok {
+		if reflect.TypeOf(input).Kind() == reflect.Float64 {
+			lng = arguments["lng"].(float64)
+		} else {
+			return nil
+		}
+	} else {
+		return nil
+	}
+
+	// Getting sunrise and sunset information
+	_ = lat
+	_ = lng
+
+	return nil
 
 }
 

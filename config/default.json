@@ -1,15 +1,15 @@
 {
-  "name": "local.iot.precision.xxx.*",
-  "api_key": "gjweoiht85093jflkes",
-  "server": "192.168.10.62",
-  "port": "9081",
-  "ssl": false,
+  "name": "joran.iot.precision.*.*",
+  "api_key": "CihC:!o~XJlYKRy7>AY1ZiJPi'?bD$",
+  "server": "joran.kite-project.net",
+  "port": "443",
+  "ssl": true,
   "address": {
     "id": "*",
-    "address": "xxx",
+    "address": "*",
     "host": "precision",
     "type": "iot",
     "domain": "local"
   },
-  "i2c": "/dev/i2c-1"
+  "i2c": ""
 }

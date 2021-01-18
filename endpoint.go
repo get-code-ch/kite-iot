@@ -71,6 +71,10 @@ func (iot *Iot) provisioning(data interface{}) {
 					iot.ics[endpoint.Address.Address] = ic
 				}
 				break
+
+			case kite.I_SOFT:
+			case kite.I_VIRTUAL:
+				break
 			default:
 				log.Printf("Unknown or unplemented ic")
 			}
@@ -88,6 +92,10 @@ func (iot *Iot) provisioning(data interface{}) {
 			}
 			break
 		case kite.I_ADS1115:
+			go iot.ics[endpoint.Address.Address].refreshAds1115(iot, iot.endpoints[endpoint.Address].endpoint)
+			break
+		case kite.I_SOFT:
+		case kite.I_VIRTUAL:
 			break
 		default:
 			break
@@ -134,7 +142,7 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 			cmd := ""
 			gpio := 0
 			state := 0
-			result := 0.0
+			var result interface{}
 
 			switch message.Action {
 			case kite.A_CMD:
@@ -281,7 +289,31 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 
 					// For ADS1115 the only one command is reading value of register
 					case "read":
-						result = iot.ics[ec.endpoint.Address.Address].readValue(ec.endpoint)
+						result = iot.ics[ec.endpoint.Address.Address].readValueAds1115(ec.endpoint)
+						response.Action = kite.A_VALUE
+
+						data := make(map[string]interface{})
+
+						data["type"] = "analog"
+						data["value"] = result
+						data["unit"] = ec.endpoint.Attributes["unit"]
+						data["name"] = ec.endpoint.Name
+						data["description"] = ec.endpoint.Description
+
+						response.Data = data
+
+						_ = ec.conn.WriteJSON(response)
+
+						break
+					}
+				}
+
+				if ec.endpoint.IC.Type == kite.I_SOFT || ec.endpoint.IC.Type == kite.I_VIRTUAL {
+					var response = kite.Message{Sender: ec.endpoint.Address, Receiver: message.Sender, Action: kite.A_VALUE}
+					switch cmd {
+
+					case "read":
+						result = iot.ics[ec.endpoint.Address.Address].readValueVirtual(ec.endpoint)
 						response.Action = kite.A_VALUE
 
 						data := make(map[string]interface{})

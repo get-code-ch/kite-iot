@@ -5,6 +5,7 @@ go 1.15
 replace (
 	github.com/get-code-ch/mcp23008/v3 => D:/projects/mcp23008/v3
 	github.com/get-code-ch/ads1115 => D:/projects/ads1115
+	github.com/get-code-ch/kite-common => D:/projects/kite-common
 )
 
 require (
