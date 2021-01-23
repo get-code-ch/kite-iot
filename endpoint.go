@@ -19,7 +19,6 @@ type (
 		conn     *websocket.Conn
 		endpoint kite.Endpoint
 		wg       sync.WaitGroup
-		//ic		 IC
 	}
 )
 
@@ -245,20 +244,6 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 						time.Sleep(time.Duration(duration) * time.Millisecond)
 						state = iot.ics[ec.endpoint.Address.Address].writeGPIO(gpio, 0)
 
-						/*
-							response.Receiver = kite.Address{Domain: iot.conf.Address.Domain, Type: kite.H_ANY, Host: "*", Address: "*", Id: "*"}
-							response.Action = kite.A_VALUE
-
-							data := make(map[string]interface{})
-							data["type"] = "gpio"
-							data["value"] = state == 1
-							data["name"] = ec.endpoint.Name
-							data["description"] = ec.endpoint.Description
-
-							response.Data = data
-
-							_ = ec.conn.WriteJSON(response)
-						*/
 						break
 
 					// Command "read" we reading and sending current state of GPIO
@@ -294,11 +279,16 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 
 						data := make(map[string]interface{})
 
-						data["type"] = "analog"
+						data["type"] = "float"
 						data["value"] = result
-						data["unit"] = ec.endpoint.Attributes["unit"]
 						data["name"] = ec.endpoint.Name
 						data["description"] = ec.endpoint.Description
+
+						if unit, ok := ec.endpoint.Attributes["unit"]; ok {
+							data["unit"] = unit
+						} else {
+							data["unit"] = ""
+						}
 
 						response.Data = data
 
@@ -318,11 +308,16 @@ func (ec *EndpointConn) waitMessage(iot *Iot) {
 
 						data := make(map[string]interface{})
 
-						data["type"] = "analog"
+						data["type"] = "string"
 						data["value"] = result
-						data["unit"] = ec.endpoint.Attributes["unit"]
 						data["name"] = ec.endpoint.Name
 						data["description"] = ec.endpoint.Description
+
+						if unit, ok := ec.endpoint.Attributes["unit"]; ok {
+							data["unit"] = unit
+						} else {
+							data["unit"] = ""
+						}
 
 						response.Data = data
 

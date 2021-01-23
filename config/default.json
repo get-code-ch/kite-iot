@@ -1,15 +1,15 @@
 {
-  "name": "joran.iot.precision.*.*",
+  "name": "docker.iot.precision.*.*",
   "api_key": "CihC:!o~XJlYKRy7>AY1ZiJPi'?bD$",
-  "server": "joran.kite-project.net",
-  "port": "443",
-  "ssl": true,
+  "server": "vm-docker.joran.local",
+  "port": "9080",
+  "ssl": false,
   "address": {
     "id": "*",
     "address": "*",
     "host": "precision",
     "type": "iot",
-    "domain": "local"
+    "domain": "docker"
   },
   "i2c": ""
 }
