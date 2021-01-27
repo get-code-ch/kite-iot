@@ -45,7 +45,7 @@ func (iot *Iot) waitMessage() {
 }
 
 func (iot *Iot) sendMessage(input chan []byte) {
-	inputRe := regexp.MustCompile(`^([^:@]*)(?:@([^:]*))?:(.+)$`)
+	inputRe := regexp.MustCompile(`^([^:@]*)(?:@([^:]*))?(?::(.+))?$`)
 
 	for {
 		// Parsing input string
@@ -60,7 +60,9 @@ func (iot *Iot) sendMessage(input chan []byte) {
 			if err := action.IsValid(); err == nil {
 				switch action {
 				default:
-					msg = string(parsed[3])
+					if len(parsed) == 4 {
+						msg = string(parsed[3])
+					}
 					message := kite.Message{Action: action, Sender: iot.conf.Address, Receiver: to, Data: msg}
 					if err := iot.conn.WriteJSON(message); err != nil {
 						iot.sync.Unlock()
@@ -72,7 +74,7 @@ func (iot *Iot) sendMessage(input chan []byte) {
 				fmt.Printf("%s> ", iot.conf.Address)
 			}
 		} else {
-			log.Printf("Invalid command ({action}[@{destination}]{:{message}})")
+			log.Printf("Invalid command ({action}[@{destination}]{:message})")
 			fmt.Printf("%s> ", iot.conf.Address)
 		}
 		iot.sync.Unlock()
