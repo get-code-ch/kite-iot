@@ -95,6 +95,7 @@ func (iot *Iot) provisioning(data interface{}) {
 			break
 		case kite.I_SOFT:
 		case kite.I_VIRTUAL:
+			go iot.ics[endpoint.Address.Address].refreshVirtual(iot, iot.endpoints[endpoint.Address].endpoint)
 			break
 		default:
 			break
