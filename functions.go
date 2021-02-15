@@ -111,6 +111,51 @@ func (ic *IC) ToLux(inputs interface{}) float64 {
 
 }
 
+func (ic *IC) LM335(inputs interface{}) float64 {
+
+	// function variables
+	var vIn float64
+	var result float64
+	var scale float64
+
+	arguments := make(map[string]interface{})
+	scale = 1
+	result = -999.0
+
+	// Check if inputs parameter are Ok, if not returning "Error" value
+	if reflect.TypeOf(inputs).Kind() == reflect.TypeOf(arguments).Kind() {
+		arguments = inputs.(map[string]interface{})
+	} else {
+		log.Printf("Invalid inputs --> %v", inputs)
+		return result
+	}
+
+	// Checking inputs arguments and initializing function variables
+	if input, ok := arguments["scale"]; ok {
+		if reflect.TypeOf(input).Kind() == reflect.Float64 {
+			scale = arguments["scale"].(float64)
+		}
+	}
+
+	if input, ok := arguments["vIn"]; ok {
+		if reflect.TypeOf(input).Kind() == reflect.Float64 {
+			vIn = arguments["vIn"].(float64)
+		} else {
+			return result
+		}
+	} else {
+		return result
+	}
+
+	// Calculating resulting value
+	result = vIn*scale - 273.15
+	if math.IsNaN(result) {
+		result = -999.0
+	}
+	return result
+
+}
+
 // SunriseSunset function returning information about sunrise/sunset/twilight depending lat and long
 func (ic *IC) SunriseSunset(inputs interface{}) string {
 

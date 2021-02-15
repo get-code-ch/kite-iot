@@ -7,7 +7,7 @@ StartLimitIntervalSec=30
 Type=simple
 Restart=always
 RestartSec=10
-User=root
+User=kite-iot
 ExecStart=/opt/kite-iot/kite-iot /opt/kite-iot/config/default.json
 
 [Install]
